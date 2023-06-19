@@ -1,0 +1,86 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: notebook
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: notebook
+  template:
+    metadata:
+      labels:
+        app: notebook
+      # annotations:
+      #   tf-version.cloud-tpus.google.com: "2.12.0"
+    spec:
+      # nodeSelector:
+        # cloud.google.com/gke-accelerator: "nvidia-l4"
+        # cloud.google.com/gke-accelerator: "nvidia-tesla-a100"
+      securityContext:
+        fsGroup: 100
+      containers:
+      - name: notebook
+        image: jupyter/tensorflow-notebook:lab-4.0.2
+        args:
+        - "start.sh"
+        - "jupyter"
+        - "lab"
+        - "--LabApp.token=''"
+        # - "--NotebookApp.allow_origin='https://example.com'"
+        env:
+        - name: GRANT_SUDO
+          value: "yes"
+        securityContext:
+          runAsUser: 0
+        resources:
+          requests:
+            cpu: 8
+            memory: 48Gi
+            ephemeral-storage: 10Gi
+          limits:
+            cpu: 8
+            memory: 48Gi
+            ephemeral-storage: 10Gi
+            # nvidia.com/gpu: 1
+            # cloud-tpus.google.com/v2: 8
+        volumeMounts:
+        - name: notebook-data
+          mountPath: /home/jovyan/work
+      volumes:
+      - name: notebook-data
+        persistentVolumeClaim:
+          claimName: notebook-data
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: notebook-data
+spec:
+  storageClassName: notebook-regional-storage
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 64Gi
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: notebook-regional-storage
+provisioner: pd.csi.storage.gke.io
+parameters:
+  type: pd-ssd
+  replication-type: regional-pd
+volumeBindingMode: WaitForFirstConsumer
+allowedTopologies:
+- matchLabelExpressions:
+  - key: topology.gke.io/zone
+    values:
+    - us-central1-a
+    - us-central1-b
+    - us-central1-c
+    - us-central1-f
